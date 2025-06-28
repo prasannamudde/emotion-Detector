@@ -1,16 +1,19 @@
+import streamlit as st
 import pandas as pd
 import re
 from sklearn.model_selection import train_test_split
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import accuracy_score
 
-# -------- Step 1: Load and Clean Data --------
-file_path = 'C:/emotion detector/emotions.txt'
-df = pd.read_csv(file_path, names=['text', 'label'], sep=';', engine='python')
- # common issue fix: set correct separator
+# -------- Load Data from GitHub --------
+@st.cache_data
+def load_data():
+    url = 'https://raw.githubusercontent.com/prasannamudde/emotion-Detector/main/emotions.txt'
+    df = pd.read_csv(url, names=['text', 'label'], sep=';', engine='python')
+    return df
 
-
-# Clean text function
+# -------- Clean Text --------
 def clean_text(text):
     if not isinstance(text, str):
         return ""
@@ -21,41 +24,54 @@ def clean_text(text):
     text = re.sub(r'\d+', '', text)
     return text.strip()
 
-# Drop non-string rows
-df = df[df['text'].apply(lambda x: isinstance(x, str))]
+# -------- Train Model --------
+@st.cache_resource
+def train_model(df):
+    df = df[df['text'].apply(lambda x: isinstance(x, str))]
+    df['clean_text'] = df['text'].apply(clean_text)
+    df = df[df['clean_text'].str.strip() != ""]
 
-# Apply cleaning
-df['clean_text'] = df['text'].apply(clean_text)
-df = df[df['clean_text'].str.strip() != ""]
+    vectorizer = TfidfVectorizer(max_features=3000)
+    X = vectorizer.fit_transform(df['clean_text'])
+    y = df['label']
 
-# -------- Step 2: Vectorize and Train Model --------
-vectorizer = TfidfVectorizer(max_features=3000)
-X = vectorizer.fit_transform(df['clean_text'])
-y = df['label']
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.5, random_state=42)
 
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.5, random_state=42)
-from sklearn.utils import class_weight
-model = LogisticRegression(class_weight='balanced', max_iter=1000)  # ensure convergence
-model.fit(X_train, y_train)
+    model = LogisticRegression(class_weight='balanced', max_iter=1000)
+    model.fit(X_train, y_train)
 
-# -------- Step 3: Chat Interface --------
-print("\n🤖 Mental Health Chatbot")
-print("Type your thoughts below. Type 'exit' to quit.\n")
+    y_pred = model.predict(X_test)
+    acc = accuracy_score(y_test, y_pred)
 
-while True:
-    try:
-        user_input = input("🗨 You: ")
-        if user_input.lower() == 'exit':
-            print("👋 Goodbye! Stay healthy.")
-            break
+    return model, vectorizer, acc
 
-        cleaned_input = clean_text(user_input)
-        if cleaned_input.strip() == "":
-            print("🤖 Bot: Please enter more descriptive thoughts.\n")
-            continue
+# -------- Streamlit UI --------
+def main():
+    st.set_page_config(page_title="Mental Health Chatbot", page_icon="🧠")
+    st.title("🤖 Mental Health Emotion Detection Chatbot")
+    st.markdown("Type in your thoughts below, and I’ll try to detect how you're feeling.")
 
-        vector_input = vectorizer.transform([cleaned_input])
-        prediction = model.predict(vector_input)[0]
-        print(f"🤖 Bot: You may be feeling *{prediction.upper()}*.\n")
-    except Exception as e:
-        print(f"❌ Error: {e}")
+    # Load and train
+    with st.spinner("Loading and training the model..."):
+        df = load_data()
+        model, vectorizer, acc = train_model(df)
+
+    st.success(f"Model trained with *{acc * 100:.2f}% accuracy*.")
+
+    # Chat input
+    user_input = st.text_area("🗨 Enter your thoughts here:", height=150)
+
+    if st.button("Analyze Emotion"):
+        if user_input.strip() == "":
+            st.warning("Please type something.")
+        else:
+            cleaned = clean_text(user_input)
+            vector = vectorizer.transform([cleaned])
+            prediction = model.predict(vector)[0]
+            st.markdown(f"### 🤔 You may be feeling: *{prediction.upper()}*")
+
+    st.markdown("---")
+    st.markdown("🔒 Your data stays local and is never stored.")
+
+if _name_ == "_main_":
+    main()
