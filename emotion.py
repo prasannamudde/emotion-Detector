@@ -51,14 +51,12 @@ def main():
     st.title("🤖 Mental Health Emotion Detection Chatbot")
     st.markdown("Type in your thoughts below, and I’ll try to detect how you're feeling.")
 
-    # Load and train
     with st.spinner("Loading and training the model..."):
         df = load_data()
         model, vectorizer, acc = train_model(df)
 
-    st.success(f"Model trained with *{acc * 100:.2f}% accuracy*.")
+    st.success(f"Model trained with **{acc * 100:.2f}% accuracy**")
 
-    # Chat input
     user_input = st.text_area("🗨 Enter your thoughts here:", height=150)
 
     if st.button("Analyze Emotion"):
@@ -68,10 +66,11 @@ def main():
             cleaned = clean_text(user_input)
             vector = vectorizer.transform([cleaned])
             prediction = model.predict(vector)[0]
-            st.markdown(f"### 🤔 You may be feeling: *{prediction.upper()}*")
+            st.markdown(f"### 🤔 You may be feeling: **{prediction.upper()}**")
 
     st.markdown("---")
-    st.markdown("🔒 Your data stays local and is never stored.")
+    st.markdown("🔒 *Your data stays local and is never stored.*")
 
-if _name_ == "_main_":
+# ✅ Correct main entry point
+if __name__ == "__main__":
     main()
